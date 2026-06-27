@@ -19,7 +19,7 @@
 <body>
 <canvas id="game"></canvas>
 <div class="hud"><div>黒猫の北極おならダッシュ</div><div id="status">← → / A D：移動　Space：ジャンプ　Shift：おなら</div></div>
-<div class="hint">地上おなら：瞬間ダッシュ<br>空中おなら：ふわっと横移動</div>
+<div class="hint">地上おなら：瞬間ダッシュ<br>空中おなら：ふわっと横移動<br>当たったら最初から</div>
 <div class="msg" id="msg">クリック / タップでスタート</div>
 <div class="controls">
   <div class="pad"><button id="left">←</button><button id="right">→</button></div>
@@ -33,7 +33,7 @@ const catImg=new Image(),snowImg=new Image(); catImg.src='assets/blackcat.png'; 
 let W,H,DPR=1,started=false,won=false,dead=false,cam=0,last=0;
 const keys={left:false,right:false,jump:false,fart:false};
 const worldW=5200, groundY=0;
-const cat={x:90,y:0,w:70,h:62,vx:0,vy:0,onGround:false,face:1,fartCD:0};
+const cat={x:90,y:0,w:350,h:310,vx:0,vy:0,onGround:false,face:1,fartCD:0,invincible:0};
 const gravity=0.72, friction=0.82, accel=0.55, maxSpeed=6.5;
 const platforms=[
   [0,0,620],[760,0,520],[1430,0,450],[2040,0,600],[2820,0,430],[3440,0,540],[4200,0,850],
@@ -41,14 +41,14 @@ const platforms=[
 ];
 const crevasses=[[620,760],[1280,1430],[1890,2040],[2650,2820],[3330,3440]];
 const enemies=[];
-for(let i=0;i<10;i++) enemies.push({type:'penguin',x:900+i*360,y:0,w:48,h:58,vx:(i%2?1:-1)*(1.1+i*.08),base:900+i*360,range:120+i*18});
-for(let i=0;i<13;i++) enemies.push({type:'seal',x:2100+i*170,y:-160-i*18,w:74,h:42,vx:-2.2-i*.04,vy:0,phase:i*.7});
+for(let i=0;i<7;i++) enemies.push({type:'penguin',x:1050+i*560,y:0,w:48,h:58,vx:(i%2?1:-1)*(0.85+i*.05),base:1050+i*560,range:90+i*12});
+for(let i=0;i<5;i++) enemies.push({type:'seal',x:2500+i*520,y:-160-i*18,w:74,h:42,vx:-1.65-i*.03,vy:0,phase:i*.9});
 const goal={x:4980,y:0,w:95,h:120};
 const particles=[];
 function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*DPR;canvas.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0)}
 addEventListener('resize',resize);resize();
 function floorY(yOff=0){return H-92-yOff}
-function reset(){cat.x=90;cat.y=floorY()-cat.h;cat.vx=cat.vy=0;cat.face=1;cat.fartCD=0;cam=0;won=dead=false;msg.textContent='';started=true;last=performance.now();requestAnimationFrame(loop)}
+function reset(){cat.x=90;cat.y=floorY()-cat.h;cat.vx=cat.vy=0;cat.face=1;cat.fartCD=0;cat.invincible=70;cam=0;won=dead=false;msg.textContent='';started=true;last=performance.now();requestAnimationFrame(loop)}
 function start(){ if(!started||dead||won) reset(); }
 addEventListener('pointerdown',start,{once:false});
 addEventListener('keydown',e=>{ if(['ArrowLeft','a','A'].includes(e.key))keys.left=true; if(['ArrowRight','d','D'].includes(e.key))keys.right=true; if([' ','ArrowUp','w','W'].includes(e.key)){keys.jump=true;e.preventDefault()} if(['Shift','x','X'].includes(e.key)){keys.fart=true;e.preventDefault()} if(e.key==='r'||e.key==='R')reset(); start();});
@@ -56,6 +56,7 @@ addEventListener('keyup',e=>{ if(['ArrowLeft','a','A'].includes(e.key))keys.left
 function bind(id,k){const b=document.getElementById(id); const on=e=>{e.preventDefault();keys[k]=true;start()}; const off=e=>{e.preventDefault();keys[k]=false}; b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointercancel',off); b.addEventListener('pointerleave',off)}
 bind('left','left');bind('right','right');bind('jump','jump');bind('fart','fart');
 function rects(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
+function hitBoxCat(){return {x:cat.x+cat.w*.28,y:cat.y+cat.h*.18,w:cat.w*.44,h:cat.h*.62}}
 function fart(){ if(cat.fartCD>0)return; const dir=cat.face||1; if(cat.onGround){cat.vx+=dir*13; cat.vy=-2.2;} else {cat.vx+=dir*7.2; cat.vy-=4.2;} cat.fartCD=48; for(let i=0;i<22;i++)particles.push({x:cat.x+(dir<0?cat.w:0),y:cat.y+cat.h*.58,vx:-dir*(2+Math.random()*5),vy:(Math.random()-.5)*3,life:28+Math.random()*18,r:5+Math.random()*10}); }
 function update(){
  if(keys.left){cat.vx-=accel;cat.face=-1} if(keys.right){cat.vx+=accel;cat.face=1}
@@ -67,9 +68,9 @@ function update(){
  for(const p of platforms){const [px,py,pw]=p, fy=floorY(py); if(cat.x+cat.w>px&&cat.x<px+pw&&cat.y+cat.h>=fy&&cat.y+cat.h-cat.vy<=fy+8&&cat.vy>=0){cat.y=fy-cat.h;cat.vy=0;cat.onGround=true;}}
  if(cat.y>H+180){dead=true;msg.innerHTML='クレバスに落ちた…<br><small>タップでリトライ</small>';started=false}
  cat.x=Math.max(0,Math.min(worldW-cat.w,cat.x));
- if(cat.fartCD>0)cat.fartCD--;
- for(const e of enemies){ if(e.type==='penguin'){e.x+=e.vx; if(Math.abs(e.x-e.base)>e.range)e.vx*=-1; e.y=floorY()-e.h;} else {e.phase+=.045; e.x+=e.vx; e.y=floorY(90)+Math.sin(e.phase)*150; if(e.x<cam-300){e.x=cam+W+300+Math.random()*700;e.phase=Math.random()*6}} if(rects(cat,e)){dead=true;msg.innerHTML='氷のどうぶつに当たった！<br><small>タップでリトライ</small>';started=false}}
- if(rects(cat,{x:goal.x,y:floorY()-goal.h,w:goal.w,h:goal.h})){won=true;msg.innerHTML='雪だるまに到着！ CLEAR!<br><small>タップで再スタート</small>';started=false}
+ if(cat.fartCD>0)cat.fartCD--; if(cat.invincible>0)cat.invincible--;
+ for(const e of enemies){ if(e.type==='penguin'){e.x+=e.vx; if(Math.abs(e.x-e.base)>e.range)e.vx*=-1; e.y=floorY()-e.h;} else {e.phase+=.045; e.x+=e.vx; e.y=floorY(90)+Math.sin(e.phase)*150; if(e.x<cam-300){e.x=cam+W+300+Math.random()*700;e.phase=Math.random()*6}} if(cat.invincible<=0 && rects(hitBoxCat(),e)){msg.textContent='障害物に当たった！最初から！'; setTimeout(reset,450); started=false; return}}
+ if(rects(hitBoxCat(),{x:goal.x,y:floorY()-goal.h,w:goal.w,h:goal.h})){won=true;msg.innerHTML='雪だるまに到着！ CLEAR!<br><small>タップで再スタート</small>';started=false}
  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life--;p.r*=.96;if(p.life<=0)particles.splice(i,1)}
  cam+=(cat.x-W*.38-cam)*.08; cam=Math.max(0,Math.min(worldW-W,cam));
  status.textContent=`おならゲージ：${cat.fartCD? '回復中' : 'OK'}　距離：${Math.floor(cat.x)} / ${worldW}`;
@@ -84,7 +85,7 @@ function draw(){
  ctx.drawImage(snowImg,goal.x-cam,floorY()-goal.h,goal.w,goal.h);
  for(const e of enemies){ctx.save();ctx.translate(e.x-cam,e.y); if(e.type==='penguin'){ctx.fillStyle='#111';ctx.beginPath();ctx.ellipse(24,31,21,29,0,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(25,35,12,18,0,0,7);ctx.fill();ctx.fillStyle='orange';ctx.beginPath();ctx.moveTo(42,28);ctx.lineTo(58,34);ctx.lineTo(42,39);ctx.fill();} else {ctx.fillStyle='#9aa7ad';ctx.beginPath();ctx.ellipse(37,24,38,19,0,0,7);ctx.fill();ctx.fillStyle='#222';ctx.beginPath();ctx.arc(58,17,3,0,7);ctx.fill();} ctx.restore();}
  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/42);ctx.fillStyle='#fff3a8';ctx.beginPath();ctx.arc(p.x-cam,p.y,p.r,0,7);ctx.fill();ctx.globalAlpha=1;}
- ctx.save();ctx.translate(cat.x-cam+cat.w/2,cat.y+cat.h/2);ctx.scale(cat.face,1);ctx.drawImage(catImg,-cat.w/2,-cat.h/2,cat.w,cat.h);ctx.restore();
+ ctx.save();ctx.translate(cat.x-cam+cat.w/2,cat.y+cat.h/2);ctx.scale(cat.face,1);if(cat.invincible>0)ctx.globalAlpha=.65+Math.sin(cat.invincible*.45)*.2;ctx.drawImage(catImg,-cat.w/2,-cat.h/2,cat.w,cat.h);ctx.globalAlpha=1;ctx.restore();
 }
 function loop(t){ if(!started)return; update();draw();requestAnimationFrame(loop)}
 draw();
